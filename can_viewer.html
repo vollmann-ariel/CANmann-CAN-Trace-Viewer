@@ -555,7 +555,16 @@
      itself — pin-left/-right are only ever set while that panel is actually open. */
   #workspace.pin-left .chart-scroll, #workspace.pin-left .chart-axis-row { margin-left: 300px; }
   #workspace.pin-right .chart-scroll, #workspace.pin-right .chart-axis-row { margin-right: 340px; }
-  .chart-empty { padding: 60px 30px; text-align: center; color: var(--ink-faint); font-size: 13px; }
+  .chart-empty { padding: 48px 30px 60px; text-align: center; color: var(--ink-faint); font-size: 13px; }
+  /* Decorative only (aria-hidden) — a logic-analyzer-style CAN bit pattern morphing into the smooth
+     analog curve it decodes into, echoing the header's own "DBC decoding" tagline. Colors follow
+     the lane header: a faint digital trace, an accent-colored decoded one, so it reads the same
+     under both themes without any hardcoded value. */
+  .chart-empty-art { width: 200px; height: auto; display: block; margin: 0 auto 16px; }
+  .chart-empty-art .ce-baseline { stroke: var(--border); }
+  .chart-empty-art .ce-digital { stroke: var(--ink-faint); stroke-width: 2.5; }
+  .chart-empty-art .ce-analog { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .chart-empty-art .ce-dot { fill: var(--accent); }
 
   .chart-lane { border-bottom: 1px solid var(--border); padding: 8px 14px 10px; position: relative; }
   .chart-lane-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -1048,7 +1057,15 @@
       </div>
       <div class="chart-scroll" id="chartScroll">
         <div class="chart-stack" id="chartStack">
-          <div class="chart-empty" id="chartEmptyHint">You haven't added any signals yet. Pick a decoded message on the left and add one of its signals with the ✛ button.</div>
+          <div class="chart-empty" id="chartEmptyHint">
+            <svg class="chart-empty-art" viewBox="0 0 240 90" fill="none" aria-hidden="true">
+              <line class="ce-baseline" x1="4" y1="60" x2="236" y2="60" stroke-dasharray="2 4"/>
+              <path class="ce-digital" d="M6,60 H22 V24 H54 V60 H86 V24 H102 V60 H118 V24 H150 V60 H166"/>
+              <path class="ce-analog" d="M166,60 C172,60 172,26 182,26 C192,26 192,66 202,66 C210,66 210,34 220,34 C226,34 228,40 234,38"/>
+              <circle class="ce-dot" cx="234" cy="38" r="3.5"/>
+            </svg>
+            You haven't added any signals yet. Pick a decoded message on the left and add one of its signals with the ✛ button.
+          </div>
         </div>
       </div>
       <div class="chart-axis-row" id="chartAxisRow" style="display:none">
@@ -1452,7 +1469,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.11.0";
+  const APP_VERSION = "7.12.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
