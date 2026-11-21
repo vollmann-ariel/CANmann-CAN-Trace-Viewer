@@ -1135,6 +1135,7 @@
 
 <div class="ctx-menu" id="chartCtxMenu" role="menu">
   <button type="button" class="ctx-menu-item" id="chartCtxJumpTrace" role="menuitem">Jump to message in Trace</button>
+  <button type="button" class="ctx-menu-item" id="chartCtxScreenshot" role="menuitem">Save screenshot (PNG)</button>
   <button type="button" class="ctx-menu-item ctx-menu-cancel" id="chartCtxCancel" role="menuitem">Cancel</button>
 </div>
 
@@ -1469,7 +1470,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.12.1";
+  const APP_VERSION = "7.13.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2432,6 +2433,10 @@
     if (chartCtxTarget) jumpToMessageInTrace(chartCtxTarget.t, chartCtxTarget.key);
     closeChartContextMenu();
   });
+  el("chartCtxScreenshot").addEventListener("click", () => {
+    exportChartStackScreenshot();
+    closeChartContextMenu();
+  });
 
   /* ---------- Plots area (View as table): right-click "export as CSV" context menu ---------- */
   function openChartTableContextMenu(x, y) {
@@ -2506,6 +2511,87 @@
       }
     }
     const blob = new Blob([text], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = suggestedName; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Compone en un solo PNG todos los lanes insertados — #chartStack no virtualiza, así que incluso
+  // los lanes scrolleados fuera de vista ya tienen su canvas dibujado y al día — recortado al rango
+  // actualmente zoomeado/paneado (cada canvas ya se dibuja contra state.chart.range, nada que
+  // recortar acá, solo apilar las imágenes ya existentes con un header de identificación por señal).
+  function exportChartStackScreenshot() {
+    if (!state.chart.range || state.chart.order.length === 0) return;
+    const series = state.chart.order.map((key) => state.chart.series.get(key)).filter((s) => s.el && s.el.canvas);
+    if (series.length === 0) return;
+
+    const styles = getComputedStyle(document.documentElement);
+    const surface = styles.getPropertyValue("--surface").trim();
+    const surface2 = styles.getPropertyValue("--surface-2").trim();
+    const ink = styles.getPropertyValue("--ink").trim();
+    const inkFaint = styles.getPropertyValue("--ink-faint").trim();
+    const dpr = window.devicePixelRatio || 1;
+
+    const captionH = Math.round(26 * dpr);
+    const headerH = Math.round(28 * dpr);
+    const width = Math.max(...series.map((s) => s.el.canvas.width));
+    const height = captionH + series.reduce((sum, s) => sum + headerH + s.el.canvas.height, 0);
+
+    const out = document.createElement("canvas");
+    out.width = width; out.height = height;
+    const ctx = out.getContext("2d");
+
+    ctx.fillStyle = surface;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = inkFaint;
+    ctx.font = `${Math.round(12 * dpr)}px sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.fillText(`Zoomed: ${fmtTime(state.chart.range.t0)} s – ${fmtTime(state.chart.range.t1)} s`, 10 * dpr, captionH / 2);
+
+    let y = captionH;
+    for (const s of series) {
+      ctx.fillStyle = surface2;
+      ctx.fillRect(0, y, width, headerH);
+
+      const swatchSize = Math.round(9 * dpr);
+      ctx.fillStyle = styles.getPropertyValue(s.colorVar).trim();
+      ctx.fillRect(10 * dpr, y + (headerH - swatchSize) / 2, swatchSize, swatchSize);
+
+      const labelX = 10 * dpr + swatchSize + 6 * dpr;
+      ctx.fillStyle = ink;
+      ctx.font = `bold ${Math.round(12 * dpr)}px sans-serif`;
+      ctx.fillText(s.signalName + (s.unit ? " (" + s.unit + ")" : ""), labelX, y + headerH / 2 - 6 * dpr);
+
+      ctx.fillStyle = inkFaint;
+      ctx.font = `${Math.round(10 * dpr)}px sans-serif`;
+      ctx.fillText(s.msgName + (s.sender ? " · " + s.sender : "") + (s.comment ? " — " + s.comment : ""), labelX, y + headerH / 2 + 7 * dpr);
+
+      y += headerH;
+      ctx.drawImage(s.el.canvas, 0, 0, s.el.canvas.width, s.el.canvas.height, 0, y, width, s.el.canvas.height);
+      y += s.el.canvas.height;
+    }
+
+    out.toBlob((blob) => { if (blob) saveChartScreenshotBlob(blob); }, "image/png");
+  }
+
+  // Mismo patrón que downloadTextFile, pero para un Blob ya armado (imagen) en vez de texto.
+  async function saveChartScreenshotBlob(blob) {
+    const suggestedName = `canmann_plots_${Date.now()}.png`;
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName, types: [{ description: "PNG", accept: { "image/png": [".png"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = suggestedName; a.click();
