@@ -1470,7 +1470,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.13.0";
+  const APP_VERSION = "7.13.1";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2576,9 +2576,15 @@
     out.toBlob((blob) => { if (blob) saveChartScreenshotBlob(blob); }, "image/png");
   }
 
+  // Fecha/hora local legible y válida en nombres de archivo de Windows (sin ":").
+  function fmtFileTimestamp(d) {
+    const p2 = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
+  }
+
   // Mismo patrón que downloadTextFile, pero para un Blob ya armado (imagen) en vez de texto.
   async function saveChartScreenshotBlob(blob) {
-    const suggestedName = `canmann_plots_${Date.now()}.png`;
+    const suggestedName = `canmann_plots_${fmtFileTimestamp(new Date())}.png`;
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
