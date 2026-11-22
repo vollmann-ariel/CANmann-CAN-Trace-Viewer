@@ -27,11 +27,11 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Pick any DBC-recognized signal (from the message list, the "Most Active" panel, or the search box — each showing its message, channel, and source; the search box also takes `*` as a wildcard, Escape clears/closes it, and ranks/counts results the same way as "Most Active", busiest signals first) and it's added as its own stacked lane labeled with its message and source, with its own Y axis.
 - Step line (a CAN signal holds its value until the next message).
 - Synchronized cursor across every lane, with a readout panel showing each signal's value (with its unit and DBC description) and the real timestamp of its last message — the readout stays compact (switching to scientific notation for very small magnitudes rather than showing a misleading "0"), while each lane's own header mirrors that same value at full precision. Drag a readout row to reorder its lane, or click it to jump straight there.
-- Mouse-wheel zoom and horizontal drag-to-pan; vertical drag to scroll through lanes that don't fit on screen.
+- Mouse-wheel zoom and free 2D drag — pan the time window and scroll through lanes that don't fit on screen in the same drag, no single-axis lock.
 - Alternative table view for each signal, with values shown at full precision.
-- Measure the time between two points: click the ruler button to open a live readout next to it — it prompts you to place the first point, ticks in real time as you hover afterward, and freezes once you click the second point.
-- Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans to center each one.
-- Right-click a lane for "Jump to time in Trace": switches tabs and selects the first message at or after that instant, across any id.
+- Measure the time between two points: click the ruler button to open a live readout next to it — it prompts you to place the first point, ticks in real time as you hover afterward, and freezes once you click the second point. Once both points are placed, every numeric lane header also shows the value change between them instead of its instantaneous value.
+- Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans there (animating the move when the target is off-screen) and stays pinned until you click a chart again.
+- Right-click the chart area for "Jump to time in Trace" (switches tabs and selects the first message at or after that instant, across any id) or "Save screenshot (PNG)" — exports every added lane, including any scrolled out of view, as a single image cropped to the currently zoomed time range.
 
 ## DBC Edit tab
 
@@ -47,6 +47,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 
 ## Interface
 
+- Once a log is loaded, the header shows its filename alongside live stats — message count, duration, unique IDs, and % decoded.
 - Light/dark theme follows the OS preference automatically.
 - The left and right panels float as translucent, blurred overlays above the trace/chart area instead of squeezing it — collapse either one from the header buttons, or from the small edge handle that stays visible (with a direction-flipping arrow) even while it's collapsed. In Trace, the search bar and message table shift to stay fully visible in the gap between whichever panels are open; in Plots, the charts always stay full width, visible (blurred) underneath the panels. The toolbar itself (search/filter row) can also be hidden independently to save vertical space.
 - Every filter/search field (Trace, Messages Seen, Most Active, Plots, DBC Edit) selects its existing text when focused, so typing replaces it directly instead of requiring it to be cleared first.

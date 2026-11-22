@@ -182,6 +182,8 @@
   }
   .stat-chip b { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; }
   .stat-chip span { font-size: 9.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-chip.stat-chip-file { max-width: 160px; }
+  .stat-chip.stat-chip-file b { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .theme-note { display: none; }
 
   /* ---------- Layout ---------- */
@@ -1432,6 +1434,7 @@
     dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC listados como referencia; cachedText es undefined hasta que hace falta (asignación a un bus, o registro de un archivo recién subido) — ver withDbcText
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
     trace: [],
+    logFileName: null,    // nombre del archivo de log actualmente cargado, o null — ver loadLogFile/renderStats
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
     prevSameIdRow: [],    // rowIndex -> index of the previous row with the same channel+id, or -1 — ver buildPrevSameIdIndex
     fastPacket: new Map(), // rowIndex -> Uint8Array | null — ver buildFastPacketReassembly/effectiveFrameData
@@ -1470,7 +1473,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.13.1";
+  const APP_VERSION = "7.14.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1828,7 +1831,7 @@
     const pill = document.createElement("div");
     pill.className = "file-pill";
     pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(fileName)}</span><span class="meta">${count.toLocaleString("en-US")} msgs.</span><button title="Remove">✕</button>`;
-    pill.querySelector("button").onclick = () => { state.trace = []; renderLogList(null, 0); recomputeAll(); };
+    pill.querySelector("button").onclick = () => { state.trace = []; state.logFileName = null; renderLogList(null, 0); recomputeAll(); };
     list.appendChild(pill);
   }
 
@@ -1838,6 +1841,7 @@
       const trace = detectAndParseLog(file.name, reader.result);
       trace.sort((a, b) => a.t - b.t);
       state.trace = trace;
+      state.logFileName = file.name;
       state.t0 = trace.length ? trace[0].t : 0;
       renderLogList(file.name, trace.length);
       resetChartSeries();
@@ -2652,7 +2656,9 @@
     state.msgIndex.forEach((e) => { if (e.name) decoded++; });
     const pct = uniq ? Math.round((decoded / uniq) * 100) : 0;
     const chip = (val, label) => `<div class="stat-chip"><b>${val}</b><span>${label}</span></div>`;
+    const fileChip = `<div class="stat-chip stat-chip-file"><b title="${escapeHtml(state.logFileName)}">${escapeHtml(state.logFileName)}</b><span>log file</span></div>`;
     strip.innerHTML =
+      fileChip +
       chip(n.toLocaleString("en-US"), "messages") +
       chip(dur.toFixed(1) + "s", "duration") +
       chip(uniq, "unique IDs") +
