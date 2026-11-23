@@ -1478,7 +1478,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.15.1";
+  const APP_VERSION = "7.16.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -2540,7 +2540,16 @@
     const surface2 = styles.getPropertyValue("--surface-2").trim();
     const ink = styles.getPropertyValue("--ink").trim();
     const inkFaint = styles.getPropertyValue("--ink-faint").trim();
-    const dpr = window.devicePixelRatio || 1;
+    const gridColor = styles.getPropertyValue("--border").trim();
+
+    // Re-render every lane at 3x pixel density (drawLane's extra scale param) instead of just
+    // stretching the normal on-screen resolution, so the grid/line/text are genuinely sharp at
+    // this size — each lane's canvas is restored to its normal resolution right after compositing
+    // (see bottom of this function), so the live chart never stays at the export resolution.
+    const EXPORT_SCALE = 3;
+    for (const s of series) drawLane(s, styles, gridColor, inkFaint, EXPORT_SCALE);
+
+    const dpr = (window.devicePixelRatio || 1) * EXPORT_SCALE;
 
     const captionH = Math.round(26 * dpr);
     const headerH = Math.round(28 * dpr);
@@ -2581,6 +2590,8 @@
       ctx.drawImage(s.el.canvas, 0, 0, s.el.canvas.width, s.el.canvas.height, 0, y, width, s.el.canvas.height);
       y += s.el.canvas.height;
     }
+
+    for (const s of series) drawLane(s, styles, gridColor, inkFaint, 1);
 
     out.toBlob((blob) => { if (blob) saveChartScreenshotBlob(blob); }, "image/png");
   }
@@ -3422,8 +3433,8 @@
   }
 
   /* ---- render de canvas ---- */
-  function resizeCanvasForDPR(canvas) {
-    const dpr = window.devicePixelRatio || 1;
+  function resizeCanvasForDPR(canvas, scale = 1) {
+    const dpr = (window.devicePixelRatio || 1) * scale;
     const rect = canvas.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -3466,8 +3477,8 @@
     updateReadout();
   }
 
-  function drawLane(s, styles, gridColor, inkFaint) {
-    const { w, h, dpr } = resizeCanvasForDPR(s.el.canvas);
+  function drawLane(s, styles, gridColor, inkFaint, scale = 1) {
+    const { w, h, dpr } = resizeCanvasForDPR(s.el.canvas, scale);
     const ctx = s.el.ctx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
