@@ -1492,7 +1492,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.17.2";
+  const APP_VERSION = "7.17.3";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1900,13 +1900,20 @@
     applyFilter();
     renderSignalPanelFor(state.selectedRow);
     invalidateVarStats();
-    // Sin trace no hay nada que graficar ni medir — redrawChart/resetZoom/measure ya cortan en
-    // silencio sin state.chart.range, pero dejarlos clickeables igual es confuso (ver chartPresetsBtn).
-    const chartToolsDisabled = state.trace.length === 0;
-    el("chartPresetsBtn").disabled = chartToolsDisabled;
-    el("chartSavePresetBtn").disabled = chartToolsDisabled;
-    el("chartResetZoomBtn").disabled = chartToolsDisabled;
-    el("chartMeasureBtn").disabled = chartToolsDisabled;
+    updateChartToolButtons(); // el trace cambió — chartPresetsBtn depende de esto (ver su propia condición abajo)
+  }
+
+  // chartPresetsBtn solo depende de haber un trace cargado (es la forma de poblar el chart desde
+  // cero). Save/Reset zoom/Measure necesitan además algo ya plotteado: sin eso no hay nada que
+  // guardar, ni state.chart.range contra el que medir o resetear el zoom (redrawChart corta en
+  // silencio en ese caso, pero dejarlos clickeables es confuso). Se llama tanto desde recomputeAll()
+  // (cambios de trace) como desde renderChartStack() (cambios de state.chart.order).
+  function updateChartToolButtons() {
+    el("chartPresetsBtn").disabled = state.trace.length === 0;
+    const hasPlots = state.trace.length > 0 && state.chart.order.length > 0;
+    el("chartSavePresetBtn").disabled = !hasPlots;
+    el("chartResetZoomBtn").disabled = !hasPlots;
+    el("chartMeasureBtn").disabled = !hasPlots;
   }
 
   function buildMessageIndex() {
@@ -3377,6 +3384,7 @@
   /* ---- DOM de los carriles ---- */
   function renderChartStack() {
     const stack = el("chartStack");
+    updateChartToolButtons();
     if (state.chart.order.length === 0) {
       stack.innerHTML = "";
       stack.appendChild(chartEmptyHintEl);
