@@ -32,6 +32,7 @@ It's a single self-contained HTML file (`can_viewer.html`) — no install, no bu
 - Measure the time between two points: click the ruler button to open a live readout next to it — it prompts you to place the first point, ticks in real time as you hover afterward, and freezes once you click the second point. Once both points are placed, every numeric lane header also shows the value change between them instead of its instantaneous value.
 - Set a trigger on a lane (a numeric threshold, or a specific `VAL_` label for enum-like signals) and step through every occurrence where the signal enters that condition — the view pans there (animating the move when the target is off-screen) and stays pinned until you click a chart again.
 - Right-click the chart area for "Jump to time in Trace" (switches tabs and selects the first message at or after that instant, across any id) or "Save screenshot (PNG)" — exports every added lane, including any scrolled out of view, as a single image cropped to the currently zoomed time range.
+- Save the currently plotted signals as a named preset (and which DBC is assigned to each bus), then load or delete saved presets later from the toolbar — persists across sessions, so a recurring set of signals doesn't need to be re-added by hand every time.
 
 ## DBC Edit tab
 

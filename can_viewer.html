@@ -550,6 +550,9 @@
   .chart-add-results .opt .src { font-size: 10px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chart-add-results .opt .c { color: var(--ink-dim); font-weight: 600; font-size: 10.5px; flex: 0 0 auto; }
 
+  .chart-presets-box { position: relative; }
+  .chart-presets-dropdown { right: auto; left: 0; width: max-content; min-width: 240px; max-width: min(480px, 70vw); padding: 6px; }
+
   .chart-scroll {
     flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; position: relative;
     transition: margin-left .25s cubic-bezier(.16,1,.3,1), margin-right .25s cubic-bezier(.16,1,.3,1);
@@ -1053,6 +1056,15 @@
           <input id="chartAddInput" placeholder="Add signal: name, message, or ID…" autocomplete="off" />
           <div class="chart-add-results" id="chartAddResults"></div>
         </div>
+        <button type="button" class="iconbtn" id="chartSavePresetBtn" title="Save current signals as a preset">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v4h6V4"/><path d="M8 14h8v6H8z"/></svg>
+        </button>
+        <div class="chart-presets-box">
+          <button type="button" class="iconbtn" id="chartPresetsBtn" title="Load or delete a saved preset">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="chart-add-results chart-presets-dropdown" id="chartPresetsDropdown"></div>
+        </div>
         <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
@@ -1438,6 +1450,7 @@
   const state = {
     dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC listados como referencia; cachedText es undefined hasta que hace falta (asignación a un bus, o registro de un archivo recién subido) — ver withDbcText
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
+    chartPresets: [],     // { name, tuples:[{channel,id,signalName}], channelDbc:{1,2,3}, savedAt } — caché en memoria, poblada al boot por loadStoredChartPresets()
     trace: [],
     logFileName: null,    // nombre del archivo de log actualmente cargado, o null — ver loadLogFile/renderStats
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
@@ -1478,7 +1491,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.16.0";
+  const APP_VERSION = "7.17.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1552,15 +1565,16 @@
    * lee de IndexedDB cuando hace falta: al asignarlo a un bus (withDbcText) o, para los que ya
    * estaban asignados la sesión anterior, inmediatamente acá mismo (loadStoredChannelDbcs sí
    * necesita el texto completo de una, para poder decodificar sin que el usuario haga nada). */
-  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files";
+  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files", CHART_PRESETS_STORE_NAME = "chart_presets";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
-      const req = indexedDB.open(DBC_DB_NAME, 3);
+      const req = indexedDB.open(DBC_DB_NAME, 4);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(DBC_STORE_NAME)) db.createObjectStore(DBC_STORE_NAME, { keyPath: "channel" });
         if (!db.objectStoreNames.contains(DBC_FILES_STORE_NAME)) db.createObjectStore(DBC_FILES_STORE_NAME, { keyPath: "fileName" });
+        if (!db.objectStoreNames.contains(CHART_PRESETS_STORE_NAME)) db.createObjectStore(CHART_PRESETS_STORE_NAME, { keyPath: "name" });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -1623,6 +1637,22 @@
       req.onsuccess = () => { if (req.result) cb(req.result.text); else onerror(); };
       req.onerror = onerror;
     }).catch(onerror);
+  }
+  function rememberChartPreset(preset) {
+    openDbcStore().then((db) => {
+      db.transaction(CHART_PRESETS_STORE_NAME, "readwrite").objectStore(CHART_PRESETS_STORE_NAME).put(preset);
+    }).catch(() => {});
+  }
+  function forgetChartPreset(name) {
+    openDbcStore().then((db) => {
+      db.transaction(CHART_PRESETS_STORE_NAME, "readwrite").objectStore(CHART_PRESETS_STORE_NAME).delete(name);
+    }).catch(() => {});
+  }
+  function loadStoredChartPresets() {
+    openDbcStore().then((db) => {
+      const req = db.transaction(CHART_PRESETS_STORE_NAME, "readonly").objectStore(CHART_PRESETS_STORE_NAME).getAll();
+      req.onsuccess = () => { state.chartPresets = req.result || []; };
+    }).catch(() => {});
   }
 
   /* ---------- self-update check (GitHub) ----------
@@ -4028,6 +4058,84 @@
     box.classList.add("open");
   }
 
+  /* ---------- Plots area: save/load/delete signal presets ---------- */
+  function saveCurrentChartAsPreset() {
+    if (state.chart.order.length === 0) return; // mismo guard que exportChartStackScreenshot
+    const name = prompt("Save current signals as preset:");
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const exists = state.chartPresets.some((p) => p.name === trimmed);
+    if (exists && !confirm(`A preset named "${trimmed}" already exists. Overwrite it?`)) return;
+
+    const tuples = state.chart.order.map((key) => {
+      const s = state.chart.series.get(key);
+      return { channel: s.channel, id: s.id, signalName: s.signalName };
+    });
+    const channelDbc = {};
+    for (const ch of [1, 2, 3]) channelDbc[ch] = state.channelDbc[ch] ? state.channelDbc[ch].fileName : null;
+
+    const preset = { name: trimmed, tuples, channelDbc, savedAt: Date.now() };
+    rememberChartPreset(preset);
+    const idx = state.chartPresets.findIndex((p) => p.name === trimmed);
+    if (idx >= 0) state.chartPresets[idx] = preset; else state.chartPresets.push(preset);
+    renderChartPresetsList();
+  }
+
+  // Reasigna el DBC de cada canal ANTES de repoblar las lanes: withDbcText puede ser asíncrono
+  // (FileReader o fetch a IndexedDB cuando el texto no está cacheado todavía), y addSignalToChart
+  // decodifica cada señal contra la asignación vigente en ese instante — si se repoblaran las lanes
+  // antes de que esto termine, decodificarían contra el DBC viejo.
+  function restorePresetChannelDbcs(channelDbc) {
+    const tasks = [1, 2, 3].map((ch) => new Promise((resolve) => {
+      const fileName = channelDbc[ch];
+      const current = state.channelDbc[ch] ? state.channelDbc[ch].fileName : null;
+      if (fileName === current) { resolve(); return; } // ya coincide, evita un recomputeAll() de más
+      if (fileName === null) { unassignChannel(ch); resolve(); return; }
+      const entry = state.dbcFiles.find((d) => d.fileName === fileName);
+      if (!entry) { resolve(); return; } // ese DBC no está en la lista de esta sesión — se deja la asignación actual
+      withDbcText(entry, (text) => { applyChannelDbc(ch, fileName, text); resolve(); });
+    }));
+    return Promise.all(tasks);
+  }
+
+  function loadChartPreset(preset) {
+    restorePresetChannelDbcs(preset.channelDbc).then(() => {
+      resetChartSeries();
+      renderChartStack();
+      for (const t of preset.tuples) addSignalToChart(t.channel, t.id, t.signalName);
+    });
+  }
+
+  function renderChartPresetsList() {
+    const box = el("chartPresetsDropdown");
+    box.innerHTML = "";
+    if (state.chartPresets.length === 0) {
+      box.innerHTML = '<div class="opt"><span class="body"><div class="sub">No saved presets yet</div></span></div>';
+    } else {
+      const list = document.createElement("div");
+      list.className = "file-pill-list";
+      for (const preset of state.chartPresets.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+        const pill = document.createElement("div");
+        pill.className = "file-pill";
+        pill.style.cursor = "pointer";
+        const n = preset.tuples.length;
+        pill.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(preset.name)}</span><span class="meta">${n} signal${n === 1 ? "" : "s"}</span><button title="Delete preset">✕</button>`;
+        pill.onclick = () => { loadChartPreset(preset); box.classList.remove("open"); };
+        pill.querySelector("button").onclick = (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Delete preset "${preset.name}"?`)) return;
+          forgetChartPreset(preset.name);
+          state.chartPresets = state.chartPresets.filter((p) => p.name !== preset.name);
+          renderChartPresetsList();
+        };
+        list.appendChild(pill);
+      }
+      box.appendChild(list);
+    }
+    box.classList.add("open");
+  }
+
   /* ---- pestañas ---- */
   function setTab(tab) {
     if (state.tab === tab) return;
@@ -4165,6 +4273,14 @@
   });
   selectAllOnFocus(el("chartAddInput"));
   document.addEventListener("click", (e) => { if (!e.target.closest(".chart-add-box")) el("chartAddResults").classList.remove("open"); });
+  el("chartSavePresetBtn").addEventListener("click", saveCurrentChartAsPreset);
+  el("chartPresetsBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const box = el("chartPresetsDropdown");
+    if (box.classList.contains("open")) { box.classList.remove("open"); return; }
+    renderChartPresetsList();
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".chart-presets-box")) el("chartPresetsDropdown").classList.remove("open"); });
   window.addEventListener("resize", () => { if (state.tab === "graficas") { layoutChartLanes(); requestRedraw(); } });
   wireChartInteraction();
 
@@ -4215,6 +4331,7 @@
   updateResultCount();
   loadStoredDbcFiles();
   loadStoredChannelDbcs();
+  loadStoredChartPresets();
   checkForUpdate();
 })();
 
