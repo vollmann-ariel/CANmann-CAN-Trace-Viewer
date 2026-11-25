@@ -1057,7 +1057,7 @@
           <input id="chartAddInput" placeholder="Add signal: name, message, or ID…" autocomplete="off" />
           <div class="chart-add-results" id="chartAddResults"></div>
         </div>
-        <button type="button" class="iconbtn" id="chartSavePresetBtn" title="Save current signals as a preset">
+        <button type="button" class="iconbtn" id="chartSavePresetBtn" title="Save current signals as a preset" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v4h6V4"/><path d="M8 14h8v6H8z"/></svg>
         </button>
         <div class="chart-presets-box">
@@ -1066,10 +1066,10 @@
           </button>
           <div class="chart-add-results chart-presets-dropdown" id="chartPresetsDropdown"></div>
         </div>
-        <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom">
+        <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
-        <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time and value change between two points">
+        <button type="button" class="iconbtn" id="chartMeasureBtn" title="Measure time and value change between two points" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="measureIcon"><path d="M4 12h16M4 8v8M20 8v8"/></svg>
         </button>
         <div class="chart-measure-readout" id="chartMeasureReadout"></div>
@@ -1492,7 +1492,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.17.1";
+  const APP_VERSION = "7.17.2";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1900,7 +1900,13 @@
     applyFilter();
     renderSignalPanelFor(state.selectedRow);
     invalidateVarStats();
-    el("chartPresetsBtn").disabled = state.trace.length === 0; // sin trace, un preset cargado quedaría con lanes en blanco (redrawChart corta en silencio sin state.chart.range)
+    // Sin trace no hay nada que graficar ni medir — redrawChart/resetZoom/measure ya cortan en
+    // silencio sin state.chart.range, pero dejarlos clickeables igual es confuso (ver chartPresetsBtn).
+    const chartToolsDisabled = state.trace.length === 0;
+    el("chartPresetsBtn").disabled = chartToolsDisabled;
+    el("chartSavePresetBtn").disabled = chartToolsDisabled;
+    el("chartResetZoomBtn").disabled = chartToolsDisabled;
+    el("chartMeasureBtn").disabled = chartToolsDisabled;
   }
 
   function buildMessageIndex() {
