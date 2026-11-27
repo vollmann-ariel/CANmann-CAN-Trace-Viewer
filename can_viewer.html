@@ -551,6 +551,7 @@
   .chart-add-results .opt .src { font-size: 10px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chart-add-results .opt .c { color: var(--ink-dim); font-weight: 600; font-size: 10.5px; flex: 0 0 auto; }
 
+  .toolbar-sep { width: 1px; height: 20px; background: var(--border); flex: 0 0 auto; }
   .chart-presets-box { position: relative; }
   .chart-presets-dropdown { right: auto; left: 0; width: max-content; min-width: 240px; max-width: min(480px, 70vw); padding: 6px; }
 
@@ -1066,6 +1067,7 @@
           </button>
           <div class="chart-add-results chart-presets-dropdown" id="chartPresetsDropdown"></div>
         </div>
+        <div class="toolbar-sep"></div>
         <button type="button" class="iconbtn" id="chartResetZoomBtn" title="Reset zoom" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
         </button>
@@ -1492,7 +1494,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.17.3";
+  const APP_VERSION = "7.17.4";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
