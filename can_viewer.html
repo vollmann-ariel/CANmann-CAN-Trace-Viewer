@@ -357,6 +357,20 @@
   #chanMap .chanmap-row { display: flex; align-items: center; gap: 8px; }
   #chanMap .chanmap-label { flex: 0 0 auto; width: 42px; font-size: 11px; font-weight: 700; color: var(--ink-dim); }
   #chanMap select { flex: 1 1 auto; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 5px 6px; }
+  #chanMap .dbc-preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  #chanMap .dbc-preset-pill {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-dim); font-size: 11.5px; font-weight: 400; cursor: pointer;
+  }
+  #chanMap .dbc-preset-pill:hover { border-color: var(--accent); color: var(--accent); }
+  #chanMap .dbc-preset-pill button { background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 1px 3px; border-radius: 50%; line-height: 1; font-size: 11px; }
+  #chanMap .dbc-preset-pill button:hover { color: var(--critical); background: var(--surface-3); }
+  #chanMap .dbc-preset-add {
+    padding: 4px 10px; border-radius: 6px; border: 1px dashed var(--border); background: none;
+    color: var(--ink-faint); font-size: 11.5px; font-weight: 400; cursor: pointer;
+  }
+  #chanMap .dbc-preset-add:hover { border-color: var(--accent); color: var(--accent); }
+  #chanMap .dbc-preset-add:disabled { opacity: .4; cursor: default; pointer-events: none; }
 
   /* ---------- Message list ---------- */
   .msg-search {
@@ -1454,6 +1468,7 @@
     dbcFiles: [],         // { fileName, file, cachedText } — archivos DBC listados como referencia; cachedText es undefined hasta que hace falta (asignación a un bus, o registro de un archivo recién subido) — ver withDbcText
     channelDbc: { 1: null, 2: null, 3: null }, // bus (1=CAN1, 2=CAN2, 3=CAN3) -> { fileName, dbc, msgCount, sigCount } | null si no hay DBC asignado
     chartPresets: [],     // { name, tuples:[{channel,id,signalName}], channelDbc:{1,2,3}, savedAt } — caché en memoria, poblada al boot por loadStoredChartPresets()
+    dbcPresets: [],       // { name, channelDbc:{1,2,3}, savedAt } — solo asignación DBC por bus, sin señales; caché poblada al boot por loadStoredDbcPresets()
     trace: [],
     logFileName: null,    // nombre del archivo de log actualmente cargado, o null — ver loadLogFile/renderStats
     msgIndex: new Map(),  // key "chan:id" -> {channel,id,count,lastRow,dbcIdx}
@@ -1494,7 +1509,7 @@
   const ROW_H = 25;
   const el = (id) => document.getElementById(id);
 
-  const APP_VERSION = "7.17.4";
+  const APP_VERSION = "7.18.0";
   const UPDATE_CHECK_URL = "https://raw.githubusercontent.com/vollmann-ariel/CANmann-CAN-Trace-Viewer/main/can_viewer.html";
   const CURRENT_FILE_NAME = decodeURIComponent(location.pathname.split("/").pop() || "") || "can_viewer.html";
 
@@ -1568,16 +1583,17 @@
    * lee de IndexedDB cuando hace falta: al asignarlo a un bus (withDbcText) o, para los que ya
    * estaban asignados la sesión anterior, inmediatamente acá mismo (loadStoredChannelDbcs sí
    * necesita el texto completo de una, para poder decodificar sin que el usuario haga nada). */
-  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files", CHART_PRESETS_STORE_NAME = "chart_presets";
+  const DBC_DB_NAME = "canmann", DBC_STORE_NAME = "dbc_channels", DBC_FILES_STORE_NAME = "dbc_files", CHART_PRESETS_STORE_NAME = "chart_presets", DBC_ASSIGNMENT_PRESETS_STORE_NAME = "dbc_assignment_presets";
   function openDbcStore() {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) { reject(new Error("IndexedDB not available")); return; }
-      const req = indexedDB.open(DBC_DB_NAME, 4);
+      const req = indexedDB.open(DBC_DB_NAME, 5);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(DBC_STORE_NAME)) db.createObjectStore(DBC_STORE_NAME, { keyPath: "channel" });
         if (!db.objectStoreNames.contains(DBC_FILES_STORE_NAME)) db.createObjectStore(DBC_FILES_STORE_NAME, { keyPath: "fileName" });
         if (!db.objectStoreNames.contains(CHART_PRESETS_STORE_NAME)) db.createObjectStore(CHART_PRESETS_STORE_NAME, { keyPath: "name" });
+        if (!db.objectStoreNames.contains(DBC_ASSIGNMENT_PRESETS_STORE_NAME)) db.createObjectStore(DBC_ASSIGNMENT_PRESETS_STORE_NAME, { keyPath: "name" });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -1655,6 +1671,22 @@
     openDbcStore().then((db) => {
       const req = db.transaction(CHART_PRESETS_STORE_NAME, "readonly").objectStore(CHART_PRESETS_STORE_NAME).getAll();
       req.onsuccess = () => { state.chartPresets = req.result || []; };
+    }).catch(() => {});
+  }
+  function rememberDbcPreset(preset) {
+    openDbcStore().then((db) => {
+      db.transaction(DBC_ASSIGNMENT_PRESETS_STORE_NAME, "readwrite").objectStore(DBC_ASSIGNMENT_PRESETS_STORE_NAME).put(preset);
+    }).catch(() => {});
+  }
+  function forgetDbcPreset(name) {
+    openDbcStore().then((db) => {
+      db.transaction(DBC_ASSIGNMENT_PRESETS_STORE_NAME, "readwrite").objectStore(DBC_ASSIGNMENT_PRESETS_STORE_NAME).delete(name);
+    }).catch(() => {});
+  }
+  function loadStoredDbcPresets() {
+    openDbcStore().then((db) => {
+      const req = db.transaction(DBC_ASSIGNMENT_PRESETS_STORE_NAME, "readonly").objectStore(DBC_ASSIGNMENT_PRESETS_STORE_NAME).getAll();
+      req.onsuccess = () => { state.dbcPresets = req.result || []; renderChanMap(); };
     }).catch(() => {});
   }
 
@@ -1850,6 +1882,65 @@
       row.appendChild(sel);
       wrap.appendChild(row);
     }
+    wrap.appendChild(buildDbcPresetsRow());
+  }
+
+  // Fila de presets de asignación bus->DBC (independiente de los presets de señales de Plots:
+  // guarda únicamente channelDbc, nunca qué señales estaban plotteadas). Se reconstruye entera
+  // cada vez que renderChanMap() corre, igual que las 3 filas CAN1/2/3 de arriba.
+  function buildDbcPresetsRow() {
+    const row = document.createElement("div");
+    row.className = "dbc-preset-row";
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "dbc-preset-add";
+    addBtn.textContent = "+ Preset";
+    addBtn.title = "Save the current CAN1/2/3 DBC assignment as a preset";
+    addBtn.disabled = [1, 2, 3].every((ch) => !state.channelDbc[ch]);
+    addBtn.onclick = saveCurrentDbcAssignmentAsPreset;
+    row.appendChild(addBtn);
+
+    for (const preset of state.dbcPresets.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+      const pill = document.createElement("div");
+      pill.className = "dbc-preset-pill";
+      pill.title = "Apply this DBC assignment";
+      pill.innerHTML = `<span>${escapeHtml(preset.name)}</span><button type="button" title="Delete preset">✕</button>`;
+      pill.addEventListener("click", (ev) => { if (!ev.target.closest("button")) applyDbcPreset(preset); });
+      pill.querySelector("button").onclick = (ev) => {
+        ev.stopPropagation();
+        if (!confirm(`Delete preset "${preset.name}"?`)) return;
+        forgetDbcPreset(preset.name);
+        state.dbcPresets = state.dbcPresets.filter((p) => p.name !== preset.name);
+        renderChanMap();
+      };
+      row.appendChild(pill);
+    }
+    return row;
+  }
+
+  function saveCurrentDbcAssignmentAsPreset() {
+    if ([1, 2, 3].every((ch) => !state.channelDbc[ch])) return; // nada asignado, nada que guardar
+    const name = prompt("Save current CAN1/2/3 DBC assignment as preset:");
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const exists = state.dbcPresets.some((p) => p.name === trimmed);
+    if (exists && !confirm(`A preset named "${trimmed}" already exists. Overwrite it?`)) return;
+
+    const channelDbc = {};
+    for (const ch of [1, 2, 3]) channelDbc[ch] = state.channelDbc[ch] ? state.channelDbc[ch].fileName : null;
+    const preset = { name: trimmed, channelDbc, savedAt: Date.now() };
+    rememberDbcPreset(preset);
+    const idx = state.dbcPresets.findIndex((p) => p.name === trimmed);
+    if (idx >= 0) state.dbcPresets[idx] = preset; else state.dbcPresets.push(preset);
+    renderChanMap();
+  }
+
+  // Reutiliza tal cual restorePresetChannelDbcs (ya escrita para el preset de señales de Plots):
+  // reasigna cada canal de forma segura, esperando si hace falta leer el DBC de forma async.
+  function applyDbcPreset(preset) {
+    restorePresetChannelDbcs(preset.channelDbc).then(() => { renderChanMap(); });
   }
 
   // Los frames capturados en CSV no llevan columna de canal (siempre 0) — se tratan como CAN1.
@@ -4350,6 +4441,7 @@
   loadStoredDbcFiles();
   loadStoredChannelDbcs();
   loadStoredChartPresets();
+  loadStoredDbcPresets();
   checkForUpdate();
 })();
 
